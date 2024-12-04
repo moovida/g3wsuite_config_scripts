@@ -3,6 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="g3wsuite_config_scripts",
     version="0.2.0",
+    description="Configuration scripts for the g3w suite setup",
     packages=find_packages(),
     entry_points={
         "console_scripts": [
