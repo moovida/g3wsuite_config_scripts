@@ -22,7 +22,7 @@ class Parameters:
         
         self.G3WSUITE_POSTGRES_PASS='myPgPasswd'
         
-        self.PG_SERVICE_CONF="[service@111.111.11.111]|host=111.111.11.111|user=myuser|password=mypwd|dbname=mydb|port=5432"
+        self.PG_SERVICE_CONF=None #"[service@111.111.11.111]|host=111.111.11.111|user=myuser|password=mypwd|dbname=mydb|port=5432"
 
         # The path to the shared volume
         self.SUITE_SHARED_VOLUME="/myniceproject/" 

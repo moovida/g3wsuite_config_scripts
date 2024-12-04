@@ -2,4 +2,4 @@ __pycache__
 
 dist/
 env/
-g3w_config_scripts.egg-info/
+g3wsuite_config_scripts.egg-info/
