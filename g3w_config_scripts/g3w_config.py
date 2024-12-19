@@ -120,11 +120,10 @@ def run_command(command):
 def clone_suite_docker_repo(parameters: Parameters):
     # clone the g3w-suite-docker repository
     if not os.path.exists("g3w-suite-docker"):
-        command = "git clone https://github.com/moovida/g3w-suite-docker"
+        command = "git clone https://github.com/g3w-suite/g3w-suite-docker"
         run_command(command)
         # add the original g3w-suite-docker as a remote
-        run_command("cd g3w-suite-docker && git remote add gis3w https://github.com/g3w-suite/g3w-suite-docker && git fetch gis3w")
-
+        run_command("cd g3w-suite-docker && git fetch gis3w")
         # checkout version to work on
         run_command("cd g3w-suite-docker && git checkout " + parameters.SUITE_REPO_TAG)
         # create a local branch from that
@@ -171,9 +170,9 @@ def clone_suite_docker_repo(parameters: Parameters):
 
 def clone_suite_admin_repo(parameters: Parameters):
     if not os.path.exists("g3w-admin"):
-        run_command("git clone https://github.com/moovida/g3w-admin")
+        run_command("git clone https://github.com/g3w-suite/g3w-admin")
         # add the original g3w-admin as a remote
-        run_command("cd g3w-admin && git remote add gis3w https://github.com/g3w-suite/g3w-admin && git fetch gis3w")
+        run_command("cd g3w-admin && git fetch gis3w")
         # checkout version to work on
         run_command("cd g3w-admin && git checkout " + parameters.SUITE_REPO_TAG)
         # create a local branch from that
@@ -211,7 +210,7 @@ def setup_env_file(parameters: Parameters):
                     f.write(f"G3WSUITE_LOCAL_CODE_PATH={parameters.LOCAL_ADMIN_CODE_PATH}\n")
                     hasLocalCodePath = True
                 elif line.startswith("FRONTEND"):
-                    f.write(f"FRONTEND={parameters.FRONTEND}\n")
+                    f.write(f"# FRONTEND={parameters.FRONTEND} -> this will be set directly in the local_settings.py\n")
                     hasFrontend = True
                 elif line.startswith("WEBGIS_PUBLIC_HOSTNAME"):
                     f.write(f"WEBGIS_PUBLIC_HOSTNAME={parameters.WEBGIS_PUBLIC_HOSTNAME}\n")
@@ -229,7 +228,7 @@ def setup_env_file(parameters: Parameters):
             if not hasLocalCodePath:
                 f.write(f"G3WSUITE_LOCAL_CODE_PATH={parameters.LOCAL_ADMIN_CODE_PATH}\n")
             if not hasFrontend:
-                f.write(f"FRONTEND={parameters.FRONTEND}\n")
+                f.write(f"# FRONTEND={parameters.FRONTEND} -> this will be set directly in the local_settings.py\n")
             if not hasHostname:
                 f.write(f"WEBGIS_PUBLIC_HOSTNAME={parameters.WEBGIS_PUBLIC_HOSTNAME}\n")
             if not hasPostgresPass:
@@ -395,27 +394,72 @@ def setup_redis_service(parameters: Parameters):
         print("#### The redis service is already present in the compose file.\n")
 
 
-def disable_frontend_app(parameters: Parameters):
+def toggle_frontend(parameters: Parameters):
+
+    enableFrontend = parameters.FRONTEND
+    if enableFrontend:
+        print("#### Enabling the frontend app.")
+
+    
     # in the settings file, make sure that in the G3WADMIN_LOCAL_MORE_APPS list, the 'frontend' app is commented (disabled)
     with open(parameters.SETTINGS_FILE, "r") as f:
         lines = f.readlines()
     with open(parameters.SETTINGS_FILE, "w") as f:
         doCheck = False
-        didFrontend = False
+        hasFrontendExtraLines = False
         for line in lines:
             if "G3WADMIN_LOCAL_MORE_APPS" in line:
                 doCheck = True
             if doCheck and "]" in line:
                 doCheck = False
 
-            if doCheck and "'frontend'" in line and not line.strip().startswith("#"):
-                f.write("# " + line)
-                print("#### The 'frontend' app has been commented in the settings file.\n")
-                didFrontend = True
+            if doCheck and "'frontend'" in line:
+                if enableFrontend and line.strip().startswith("#"):
+                    line = line.replace("#", "")
+                    print("#### The 'frontend' app has been enabled in the settings file.\n")
+                elif not enableFrontend and not line.strip().startswith("#"):
+                    line = "# " + line
+                    print("#### The 'frontend' app has been disabled in the settings file.\n")
+                else:
+                    print(f"#### enableFrontend={enableFrontend} with line={line}\n")
+            
+            # also check if FRONTEND = lines ar present
+            if "FRONTEND = " in line or "FRONTEND_APP = " in line:
+                hasFrontendExtraLines = True
+                if not enableFrontend:
+                    continue
+
+            f.write(line)
+
+        if enableFrontend and not hasFrontendExtraLines:
+            f.write("\n\nFRONTEND = True")
+            f.write("\nFRONTEND_APP = 'frontend'\n")
+            print("#### The FRONTEND = True and FRONTEND_APP = 'frontend' lines have been added to the settings file.\n")
+
+    
+    # clone the g3w-frontend repository if it is not already present
+    if enableFrontend:
+        if not os.path.exists("g3w-admin/g3w-admin/frontend"):
+            run_command("cd g3w-admin/g3w-admin && git clone https://github.com/g3w-suite/g3w-admin-frontend.git  frontend")
+
+    # disable entrypoint lines that deal with frontend
+        # temporary fix for the docker-entrypoint.sh
+    newLines = []
+    with open(parameters.ENTRYPOINT_FILE, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            if "if [[  -f /tmp/.X99-lock ]]; then" in line:
+                newLines.append("if [  -f /tmp/.X99-lock ]; then\n")
+            elif "if [[ \"${FRONTEND}\" =~ [Tt][Rr][Uu][Ee] ]] ; then" in line:
+                newLines.append("if false; then # -> this part has been handled in the local_settings.py already, disabling here\n")
             else:
-                f.write(line)
-        if not didFrontend:
-            print("#### No need to modify the 'frontend' app.\n")
+                newLines.append(line)
+
+    with open(parameters.ENTRYPOINT_FILE, "w") as f:
+        for line in newLines:
+            f.write(line)
+
+        
 
 
 def setup_plugin(parameters: Parameters):
@@ -532,7 +576,7 @@ def create_vscode_launch_json():
                 "name": "Suite dev - migrate",
                 "type": "debugpy",
                 "request": "launch",
-                "args": [
+                "args": [-> this will be set directly in the local_settings.py
                     "migrate"
                 ],
                 "django": true,

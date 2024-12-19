@@ -37,22 +37,6 @@ def main():
 
     cfg.createRunScripts(parameters)
 
-    # temporary fix for the docker-entrypoint.sh
-    newLines = []
-    with open(parameters.ENTRYPOINT_FILE, "r") as f:
-        lines = f.readlines()
-        for line in lines:
-            if "if [[  -f /tmp/.X99-lock ]]; then" in line:
-                newLines.append("if [  -f /tmp/.X99-lock ]; then\n")
-            elif "if [[ \"${FRONTEND}\" =~ [Tt][Rr][Uu][Ee] ]] ; then" in line:
-                newLines.append("if echo \"${FRONTEND}\" | grep -iq \"^true$\"; then\n")
-            else:
-                newLines.append(line)
-
-    with open(parameters.ENTRYPOINT_FILE, "w") as f:
-        for line in newLines:
-            f.write(line)
-
 
     print("###################################################################################################")
     print("###################################################################################################")
