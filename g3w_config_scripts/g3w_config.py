@@ -15,6 +15,7 @@ class Parameters:
         self.WEBGIS_PUBLIC_HOSTNAME="v38.g3wsuite.it"
         # The docker project tag of the g3w-suite-docker to use
         self.SUITE_REPO_TAG="v3.8.0" 
+        self.SUITE_ADMIN_REPO_TAG=self.SUITE_REPO_TAG 
         # The docker image to use
         self.SUITE_DOCKER_IMAGE="g3wsuite/g3w-suite:v3.8.x" 
         # The name of the new branch to create
@@ -65,6 +66,7 @@ def read_config_from_file(path: str, parameters: Parameters):
             
     # set the parameters. FIXED FILES vars are not handled
     parameters.SUITE_REPO_TAG = paramsDict.get("SUITE_REPO_TAG", parameters.SUITE_REPO_TAG)
+    parameters.SUITE_ADMIN_REPO_TAG = paramsDict.get("SUITE_ADMIN_REPO_TAG", parameters.SUITE_REPO_TAG)
     parameters.SUITE_DOCKER_IMAGE = paramsDict.get("SUITE_DOCKER_IMAGE", parameters.SUITE_DOCKER_IMAGE)
     parameters.MY_NEW_BRANCH = paramsDict.get("MY_NEW_BRANCH", parameters.MY_NEW_BRANCH)
     parameters.SUITE_SHARED_VOLUME = paramsDict.get("SUITE_SHARED_VOLUME", parameters.SUITE_SHARED_VOLUME)
@@ -99,6 +101,8 @@ def print_used_configuration(parameters: Parameters):
         print(f"# SETTING UP FOR PRODUCTION MODE")
     print(f"# Setting up the g3w suite development environment with the following parameters:")
     print(f"# SUITE_REPO_TAG: {parameters.SUITE_REPO_TAG}")
+    if parameters.SUITE_ADMIN_REPO_TAG != parameters.SUITE_REPO_TAG:
+        print(f"# SUITE_ADMIN_REPO_TAG: {parameters.SUITE_ADMIN_REPO_TAG}")
     print(f"# SUITE_DOCKER_IMAGE: {parameters.SUITE_DOCKER_IMAGE}")
     print(f"# MY_NEW_BRANCH: {parameters.MY_NEW_BRANCH}")
     print(f"#")
@@ -199,7 +203,7 @@ def clone_suite_admin_repo(parameters: Parameters):
         # add the original g3w-admin as a remote
         run_command("cd g3w-admin && git fetch")
         # checkout version to work on
-        run_command("cd g3w-admin && git checkout " + parameters.SUITE_REPO_TAG)
+        run_command("cd g3w-admin && git checkout " + parameters.SUITE_ADMIN_REPO_TAG)
         # create a local branch from that
         run_command("cd g3w-admin && git checkout -b " + parameters.MY_NEW_BRANCH)
         print("#### The new g3w-admin branch has been created locally, you can push it to the remote repository at any time.")

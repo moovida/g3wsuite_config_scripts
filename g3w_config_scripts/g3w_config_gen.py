@@ -19,6 +19,7 @@ def main():
     answ = input(f"Set the SUITE_REPO_TAG parameter: [{parameters.SUITE_REPO_TAG}] -> ")
     if answ:
         parameters.SUITE_REPO_TAG = answ
+        parameters.SUITE_ADMIN_REPO_TAG = answ
     
     answ = input(f"Set the SUITE_DOCKER_IMAGE parameter: [{parameters.SUITE_DOCKER_IMAGE}] -> ")
     if answ:
@@ -95,6 +96,7 @@ def main():
         f.write("# Configuration file for the g3w suite setup\n")
         f.write("\n")
         f.write(f"SUITE_REPO_TAG={parameters.SUITE_REPO_TAG}\n")
+        f.write(f"SUITE_ADMIN_REPO_TAG={parameters.SUITE_ADMIN_REPO_TAG}\n")
         f.write(f"SUITE_DOCKER_IMAGE={parameters.SUITE_DOCKER_IMAGE}\n")
         f.write(f"MY_NEW_BRANCH={parameters.MY_NEW_BRANCH}\n")
         f.write(f"SUITE_SHARED_VOLUME={parameters.SUITE_SHARED_VOLUME}\n")
