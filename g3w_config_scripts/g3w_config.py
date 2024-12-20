@@ -28,6 +28,7 @@ class Parameters:
         self.SUITE_SHARED_VOLUME="/myniceproject/" 
         self.DEBUG=True
         self.FRONTEND=False
+        self.FRONTEND_REPO="https://github.com/g3w-suite/g3w-admin-frontend.git"
 
         # optional plugin setup. Set to None if not needed
         self.PLUGIN_APP_NAME=None #"mypluginname" 
@@ -37,6 +38,7 @@ class Parameters:
         self.ENV_FILE = "g3w-suite-docker/.env"
         self.SETTINGS_FILE="g3w-suite-docker/config/g3w-suite/settings_docker.py"
         self.PG_SERVICE_FILE="g3w-suite-docker/secrets/pg_service.conf"
+        self.NGINX_FOLDER="g3w-suite-docker/config/nginx/"
 
         # get absolute path to the g3w-admin code, automatically generated
         self.LOCAL_ADMIN_CODE_PATH = os.path.abspath("g3w-admin")
@@ -44,7 +46,10 @@ class Parameters:
 
         self.COMPOSE_FILE = "g3w-suite-docker/docker-compose-dev.yml" if doDevel else "g3w-suite-docker/docker-compose.yml"
         self.ENTRYPOINT_FILE="g3w-suite-docker/scripts/docker-entrypoint-dev.sh" if doDevel else "g3w-suite-docker/scripts/docker-entrypoint.sh"
-   
+
+        self.DO_HTTPS = False
+        self.HTTPS_CERT = None
+        self.HTTPS_KEY = None
 
 #######################################
 def read_config_from_file(path: str, parameters: Parameters):
@@ -65,6 +70,8 @@ def read_config_from_file(path: str, parameters: Parameters):
     parameters.SUITE_SHARED_VOLUME = paramsDict.get("SUITE_SHARED_VOLUME", parameters.SUITE_SHARED_VOLUME)
     parameters.DEBUG = paramsDict.get("DEBUG", parameters.DEBUG)
     parameters.FRONTEND = paramsDict.get("FRONTEND", parameters.FRONTEND)
+    if parameters.FRONTEND:
+        parameters.FRONTEND_REPO = paramsDict.get("FRONTEND_REPO", parameters.FRONTEND_REPO)
     parameters.WEBGIS_PUBLIC_HOSTNAME = paramsDict.get("WEBGIS_PUBLIC_HOSTNAME", parameters.WEBGIS_PUBLIC_HOSTNAME)
     parameters.G3WSUITE_POSTGRES_PASS = paramsDict.get("G3WSUITE_POSTGRES_PASS", parameters.G3WSUITE_POSTGRES_PASS)
     parameters.PG_SERVICE_CONF = paramsDict.get("PG_SERVICE_CONF", parameters.PG_SERVICE_CONF)
@@ -72,6 +79,15 @@ def read_config_from_file(path: str, parameters: Parameters):
         print("##### Adding plugin: " + paramsDict["PLUGIN_APP_NAME"])
         parameters.PLUGIN_APP_NAME = paramsDict["PLUGIN_APP_NAME"]
         parameters.PLUGIN_REPO = paramsDict.get("PLUGIN_REPO")
+    if not parameters.DO_DEVEL:
+        parameters.DO_HTTPS = paramsDict.get("DO_HTTPS", parameters.DO_HTTPS)
+        parameters.HTTPS_CERT = paramsDict.get("HTTPS_CERT", parameters.HTTPS_CERT)
+        parameters.HTTPS_KEY = paramsDict.get("HTTPS_KEY", parameters.HTTPS_KEY)
+
+    if parameters.DO_DEVEL:
+        parameters.DEBUG = True
+
+
 
 
 def print_used_configuration(parameters: Parameters):
@@ -90,9 +106,13 @@ def print_used_configuration(parameters: Parameters):
     print(f"# -> MOUNTED CODE PATH: {parameters.LOCAL_ADMIN_CODE_PATH}")
     print(f"#")
     print(f"# DEBUG: {parameters.DEBUG}")
+    print(f"# ")
     print(f"# FRONTEND: {parameters.FRONTEND}")
+    if parameters.FRONTEND:
+        print(f"# FRONTEND_REPO: {parameters.FRONTEND_REPO}")
+    print(f"# ")
+
     if parameters.PLUGIN_APP_NAME:
-        print(f"#")
         print(f"# -> PLUGIN_APP_NAME: {parameters.PLUGIN_APP_NAME}")
         print(f"# -> PLUGIN_REPO: {parameters.PLUGIN_REPO}")
         print(f"#")
@@ -103,8 +123,13 @@ def print_used_configuration(parameters: Parameters):
     print(f"# WEBGIS_PUBLIC_HOSTNAME: {parameters.WEBGIS_PUBLIC_HOSTNAME}")
     print(f"# G3WSUITE_POSTGRES_PASS: {parameters.G3WSUITE_POSTGRES_PASS}")
     print(f"#")
-    print(f"# -> PG_SERVICE_CONF: {parameters.PG_SERVICE_CONF}")
+    print(f"# PG_SERVICE_CONF: {parameters.PG_SERVICE_CONF}")
     print(f"#")
+    if parameters.DO_HTTPS and not parameters.DO_DEVEL:
+        print(f"# HTTPS will be enabled")
+        if parameters.HTTPS_CERT and parameters.HTTPS_KEY:
+            print(f"# -> HTTPS_CERT: {parameters.HTTPS_CERT}")
+            print(f"# -> HTTPS_KEY: {parameters.HTTPS_KEY}")
     print("###################################################################################################")
     print("###################################################################################################")
 
@@ -123,7 +148,7 @@ def clone_suite_docker_repo(parameters: Parameters):
         command = "git clone https://github.com/g3w-suite/g3w-suite-docker"
         run_command(command)
         # add the original g3w-suite-docker as a remote
-        run_command("cd g3w-suite-docker && git fetch gis3w")
+        run_command("cd g3w-suite-docker && git fetch")
         # checkout version to work on
         run_command("cd g3w-suite-docker && git checkout " + parameters.SUITE_REPO_TAG)
         # create a local branch from that
@@ -172,7 +197,7 @@ def clone_suite_admin_repo(parameters: Parameters):
     if not os.path.exists("g3w-admin"):
         run_command("git clone https://github.com/g3w-suite/g3w-admin")
         # add the original g3w-admin as a remote
-        run_command("cd g3w-admin && git fetch gis3w")
+        run_command("cd g3w-admin && git fetch")
         # checkout version to work on
         run_command("cd g3w-admin && git checkout " + parameters.SUITE_REPO_TAG)
         # create a local branch from that
@@ -304,7 +329,7 @@ def createRunScripts(parameters: Parameters):
 
             echo "Starting the g3w suite dev logs."
             cd g3w-suite-docker/
-            docker compose -f docker-compose-dev.yml logs -f
+            docker compose -f docker-compose-dev.yml logs -f $1
             cd ..
         """)
         with open("logs_dev.sh", "w") as f:
@@ -346,7 +371,7 @@ def createRunScripts(parameters: Parameters):
                                 
             echo "Starting the g3w suite logs."
             cd g3w-suite-docker/
-            docker compose -f docker-compose.yml logs -f
+            docker compose -f docker-compose.yml logs -f $1
             cd ..
         """)
         with open("logs.sh", "w") as f:
@@ -420,6 +445,10 @@ def toggle_frontend(parameters: Parameters):
                 elif not enableFrontend and not line.strip().startswith("#"):
                     line = "# " + line
                     print("#### The 'frontend' app has been disabled in the settings file.\n")
+                elif enableFrontend and not line.strip().startswith("#"):
+                    print(f"#### The frontend app is already enabled.\n")
+                elif not enableFrontend and line.strip().startswith("#"):
+                    print(f"#### The frontend app is already disabled.\n")
                 else:
                     print(f"#### enableFrontend={enableFrontend} with line={line}\n")
             
@@ -440,7 +469,7 @@ def toggle_frontend(parameters: Parameters):
     # clone the g3w-frontend repository if it is not already present
     if enableFrontend:
         if not os.path.exists("g3w-admin/g3w-admin/frontend"):
-            run_command("cd g3w-admin/g3w-admin && git clone https://github.com/g3w-suite/g3w-admin-frontend.git  frontend")
+            run_command(f"cd g3w-admin/g3w-admin && git clone {parameters.FRONTEND_REPO} frontend")
 
     # disable entrypoint lines that deal with frontend
         # temporary fix for the docker-entrypoint.sh
@@ -528,6 +557,67 @@ def setup_plugin(parameters: Parameters):
         
     else:
         print("#### No plugin setup.\n")
+
+
+def setup_https(parameters: Parameters):
+    if parameters.DO_HTTPS:
+        # tweak the nginx.conf file
+        newLines = []
+        with open(parameters.NGINX_FOLDER + "nginx.conf", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if "default dev.g3wsuite.it" in line:
+                    line = line.replace("dev.g3wsuite.it", f"{parameters.WEBGIS_PUBLIC_HOSTNAME}")
+                elif "/etc/nginx/conf.d/django" in line and not "/etc/nginx/conf.d/django_ssl" in line:
+                    line = "# " + line
+                elif "/etc/nginx/conf.d/django_ssl" in line:
+                    line = line.replace("#", "")
+
+                newLines.append(line)
+
+        with open(parameters.NGINX_FOLDER + "nginx.conf", "w") as f:
+            for line in newLines:
+                f.write(line)
+        print("#### The nginx.conf file has been updated.\n")
+
+        # if the HTTPS_CERT and HTTPS_KEY are set, copy the files to an ssl folder in the shared volume
+        if parameters.HTTPS_CERT and os.path.exists(parameters.HTTPS_KEY):
+            certFileName = os.path.basename(parameters.HTTPS_CERT)
+            keyFileName = os.path.basename(parameters.HTTPS_KEY)
+            # make folder ssl in the shared volume
+            sslFolder = os.path.join(parameters.SUITE_SHARED_VOLUME, "ssl")
+            if not os.path.exists(sslFolder):
+                os.makedirs(sslFolder)
+                print("#### The ssl folder has been created.\n")
+            # copy the cert and key files
+            run_command(f"cp {parameters.HTTPS_CERT} {sslFolder}/{certFileName}")
+            run_command(f"cp {parameters.HTTPS_KEY} {sslFolder}/{keyFileName}")
+            print("#### The certificate and key files have been copied to the ssl folder.\n")
+            
+            # now create the myssl file in the ssl folder
+            with open(parameters.NGINX_FOLDER + "/myssl", "w") as f:
+                f.write(f"ssl_certificate /shared-volume/ssl/{certFileName};\n")
+                f.write(f"ssl_certificate_key /shared-volume/ssl/{keyFileName};\n")
+            print("#### The myssl file has been created.\n")
+
+            # now we need to set this instead of the "include /etc/nginx/conf.d/letsencrypt;" in the django_ssl file
+            newLines = []
+            with open(parameters.NGINX_FOLDER + "django_ssl", "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    if "/etc/nginx/conf.d/letsencrypt;" in line:
+                        line = "   include /etc/nginx/conf.d/myssl;"
+                    newLines.append(line)
+
+            with open(parameters.NGINX_FOLDER + "django_ssl", "w") as f:
+                for line in newLines:
+                    f.write(line)
+
+            print("#### The django_ssl file has been updated.\n")
+            
+
+
+            
 
 
 def setup_debug_start(parameters: Parameters):

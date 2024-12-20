@@ -40,6 +40,12 @@ def main():
     if answ:
         parameters.FRONTEND = answ
 
+        if parameters.FRONTEND:
+            answ = input(f"Set optional FRONTEND_REPO: [{parameters.FRONTEND_REPO}] -> ")
+            if answ:
+                parameters.FRONTEND_REPO = answ
+
+
     addPlugin = input("Do you want to add a plugin? (y/n) -> ")
     if addPlugin == "y":
         answ = input(f"Set the PLUGIN_APP_NAME parameter: ")
@@ -63,6 +69,20 @@ def main():
         answ = input(f"Set the PG_SERVICE_CONF parameter: ")
         if answ:
             parameters.PG_SERVICE_CONF = answ
+
+    addHttps = input("Do you want to enable HTTPS? (y/n) ")
+    if addHttps == "y":
+        parameters.DO_HTTPS = True
+
+        addCert = input("Add your certificate file: ")
+        if addCert and os.path.exists(addCert):
+            parameters.HTTPS_CERT = addCert
+        
+        addKey = input("Add your key file: ")
+        if addKey and os.path.exists(addKey):
+            parameters.HTTPS_KEY = addKey
+
+    
 
     print("#### The parameters are:")
     cfg.print_used_configuration(parameters)

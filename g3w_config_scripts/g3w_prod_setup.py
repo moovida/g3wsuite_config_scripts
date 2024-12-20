@@ -13,6 +13,12 @@ def main():
         print(f"#### Using parameters from file: {sys.argv[1]}")
         # read the file and set the parameters
         cfg.read_config_from_file(sys.argv[1], parameters)
+    else:
+        # check if there is a config.properties file in the current folder
+        if os.path.exists("config.properties"):
+            print(f"#### Using parameters from file: config.properties")
+            cfg.read_config_from_file("config.properties", parameters)
+
 
     cfg.print_used_configuration(parameters)
 
@@ -31,9 +37,11 @@ def main():
     cfg.setup_env_file(parameters)
     cfg.setup_pg_service_file(parameters)
 
-    cfg.disable_frontend_app(parameters)
+    cfg.toggle_frontend(parameters)
 
     cfg.setup_plugin(parameters)
+
+    cfg.setup_https(parameters)
 
     cfg.createRunScripts(parameters)
 

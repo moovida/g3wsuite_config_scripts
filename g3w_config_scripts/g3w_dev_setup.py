@@ -11,21 +11,14 @@ def main():
 
     # if a file was supplied as an argument, use that as the parameters properties file
     if len(sys.argv) > 1:
-        if sys.argv[1] == "-h" or sys.argv[1] == "--help":
-            print("Usage: gis3w_dev_setup.py [properties_file]")
-            print("properties_file: a file containing the properties to be used in the setup.")
-            print("If no file is provided, the script will use the default values.")
-            print("EXAMPLE FILE CONTENT:\n")
-            print("-----------------------------------------------------------------")
-            # print the content of the example file config_example.properties
-            filePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "config_example.properties")
-            with open(filePath, "r") as f:
-                print(f.read())
-            print("-----------------------------------------------------------------")
-            sys.exit(0)
         print(f"#### Using parameters from file: {sys.argv[1]}")
         # read the file and set the parameters
         cfg.read_config_from_file(sys.argv[1], parameters)
+    else:
+        # check if there is a config.properties file in the current folder
+        if os.path.exists("config.properties"):
+            print(f"#### Using parameters from file: config.properties")
+            cfg.read_config_from_file("config.properties", parameters)
 
     cfg.print_used_configuration(parameters)
 
@@ -46,7 +39,7 @@ def main():
     cfg.setup_pg_service_file(parameters)
     cfg.setup_redis_service(parameters)
 
-    cfg.disable_frontend_app(parameters)
+    cfg.toggle_frontend(parameters)
 
     # in the entrypoint file, disable line: python3 manage.py runserver 0.0.0.0:8000
     with open(parameters.ENTRYPOINT_FILE, "r") as f:
