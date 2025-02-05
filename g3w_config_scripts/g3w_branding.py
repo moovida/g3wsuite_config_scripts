@@ -23,15 +23,41 @@ def main():
 
 
     settingsPath = "./g3w-suite-docker/config/g3w-suite/settings_docker.py"
-    staticPath = "./g3w-admin/g3w-admin/core/static/custom_static/"
-    G3WSUITE_CUSTOM_STATIC_PATH = staticPath
+    envPath = "./g3w-suite-docker/.env"
+    locationsPath = "./g3w-suite-docker/config/nginx/locations"
+    sharedVolume = None
+
+    # get from the env file the WEBGIS_DOCKER_SHARED_VOLUME variable
+    with open(envPath, "r") as f:
+        lines = f.readlines()
+    for line in lines:
+        if line.startswith("WEBGIS_DOCKER_SHARED_VOLUME="):
+            sharedVolume = line.split("=")[1].strip()
+            break
+    if not sharedVolume:
+        print("#### The shared volume path could not be found in the .env file. Exiting...")
+        sys.exit(1)
+
+
+    G3WSUITE_CUSTOM_STATIC_PATH = None
+    if doDevel:
+        relPath = "./g3w-admin/g3w-admin/core/static/custom_static/"
+        G3WSUITE_CUSTOM_STATIC_PATH = os.path.abspath(relPath)
+    else:
+        # if sharedVolume has no end slash, add it
+        if sharedVolume[-1] != "/":
+            sharedVolume += "/"
+        G3WSUITE_CUSTOM_STATIC_PATH = sharedVolume + "custom_static/"
     if not os.path.exists(G3WSUITE_CUSTOM_STATIC_PATH):
         os.makedirs(G3WSUITE_CUSTOM_STATIC_PATH)
 
     # check that both exist
-    if not os.path.exists(settingsPath) or not os.path.exists(staticPath):
-        print("#### The settings file or the static folder do not exist. Exiting...")
+    if not os.path.exists(settingsPath) or not os.path.exists(G3WSUITE_CUSTOM_STATIC_PATH) or not os.path.exists(locationsPath):
+        print("#### The settings file, the static folder or the nginx locations file do not exist. Exiting...")
         sys.exit(1)
+
+
+        
 
     ####################
     # settings section
@@ -60,9 +86,17 @@ def main():
     G3WSUITE_CUSTOM_STATIC_URL = '/custom_static/'
     if doDevel:
         G3WSUITE_CUSTOM_STATIC_URL = '/static/custom_static/'
-    answ = input(f"Set the G3WSUITE_CUSTOM_STATIC_URL: [{G3WSUITE_CUSTOM_STATIC_URL}] ->   ")
-    if answ:
-        G3WSUITE_CUSTOM_STATIC_URL = answ
+    else:
+        # add the location to the locationsPath file before the first location
+        with open(locationsPath, "r") as f:
+            lines = f.readlines()
+        hasWritten = False
+        with open(locationsPath, "w") as f:
+            for line in lines:
+                if not hasWritten and line.strip().startswith("location"):
+                    f.write(f"\nlocation {G3WSUITE_CUSTOM_STATIC_URL} {{\n   root /shared-volume/;\n}}\n")
+                    hasWritten = True
+                f.write(line)
 
     G3WSUITE_CUSTOM_CSS = "G3WSUITE_CUSTOM_CSS = [\n    G3WSUITE_CUSTOM_STATIC_URL + 'css/custom.css'\n]"
     # also create the css folder and custom.css file
@@ -71,10 +105,6 @@ def main():
     # create an empty custom.css file
     customCssFilePath = G3WSUITE_CUSTOM_STATIC_PATH + 'css/custom.css'
 
-    if not doDevel:
-        # if we are in prod mode, we need to also set nginx to point to the right path
-        # TODO
-        pass
     
 
     G3WSUITE_FAVICON = None
