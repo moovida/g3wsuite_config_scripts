@@ -57,5 +57,5 @@ branding module:
 g3w_branding
 ```
 
-You will be askef for all the possible branding parameters.
+You will be asked for all the possible branding parameters.
 
