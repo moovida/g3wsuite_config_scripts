@@ -62,8 +62,14 @@ def read_config_from_file(path: str, parameters: Parameters):
         if "=" in line and not line.startswith("#"):
             # find first = and split the line
             key, value = line.split("=", maxsplit=1)
-            paramsDict[key.strip()] = value.strip()
-            
+            #  check type of value
+            if value.strip().lower() in ["true", "false"]:
+                value = value.strip().lower() == "true"
+            else:
+                value = value.strip()
+            paramsDict[key.strip()] = value
+            print(f"##### Found parameter: {key.strip()} = {value}")
+
     # set the parameters. FIXED FILES vars are not handled
     parameters.SUITE_REPO_TAG = paramsDict.get("SUITE_REPO_TAG", parameters.SUITE_REPO_TAG)
     parameters.SUITE_ADMIN_REPO_TAG = paramsDict.get("SUITE_ADMIN_REPO_TAG", parameters.SUITE_REPO_TAG)
@@ -100,11 +106,23 @@ def print_used_configuration(parameters: Parameters):
     else:
         print(f"# SETTING UP FOR PRODUCTION MODE")
     print(f"# Setting up the g3w suite development environment with the following parameters:")
-    print(f"# SUITE_REPO_TAG: {parameters.SUITE_REPO_TAG}")
-    if parameters.SUITE_ADMIN_REPO_TAG != parameters.SUITE_REPO_TAG:
-        print(f"# SUITE_ADMIN_REPO_TAG: {parameters.SUITE_ADMIN_REPO_TAG}")
+
+    useMyBranch = False
+    if not os.path.exists("g3w-admin"):
+        print(f"# SUITE_REPO_TAG: {parameters.SUITE_REPO_TAG}")
+        useMyBranch = True
+    else:
+        print(f"# Using g3w-admin from existing folder.")
+    if not os.path.exists("g3w-suite-docker"):
+        if parameters.SUITE_ADMIN_REPO_TAG != parameters.SUITE_REPO_TAG:
+            print(f"# SUITE_ADMIN_REPO_TAG: {parameters.SUITE_ADMIN_REPO_TAG}")
+        useMyBranch = True
+    else:
+        print(f"# Using g3w-suite-docker from existing folder.")
+    if useMyBranch:
+        print(f"# MY_NEW_BRANCH: {parameters.MY_NEW_BRANCH}")
+
     print(f"# SUITE_DOCKER_IMAGE: {parameters.SUITE_DOCKER_IMAGE}")
-    print(f"# MY_NEW_BRANCH: {parameters.MY_NEW_BRANCH}")
     print(f"#")
     print(f"# -> SUITE_SHARED_VOLUME: {parameters.SUITE_SHARED_VOLUME}")
     print(f"# -> MOUNTED CODE PATH: {parameters.LOCAL_ADMIN_CODE_PATH}")
@@ -159,43 +177,44 @@ def clone_suite_docker_repo(parameters: Parameters):
         run_command("cd g3w-suite-docker && git checkout -b " + parameters.MY_NEW_BRANCH)
         print("#### The new branch has been created locally, you can push it to the remote repository at any time.")
 
-        if parameters.DO_DEVEL:
-            # in the g3w-suite-docker/docker-compose-dev.yml substitute the right image to address (in this case the v3.7.x train):
-            # -    image: g3wsuite/g3w-suite:dev
-            # +    image: g3wsuite/g3w-suite:v3.7.x
-            with open(parameters.COMPOSE_FILE, "r") as f:
-                lines = f.readlines()
-            with open(parameters.COMPOSE_FILE, "w") as f:
-                for line in lines:
-                    f.write(line.replace("image: g3wsuite/g3w-suite:dev", f"image: {parameters.SUITE_DOCKER_IMAGE}"))
-
-            # add missing line: ./secrets/pg_service.conf:${PGSERVICEFILE} to the volumes part of the db service
-            with open(parameters.COMPOSE_FILE, "r") as f:
-                lines = f.readlines()
-            with open(parameters.COMPOSE_FILE, "w") as f:
-                for line in lines:
-                    if "QGIS3.ini" in line:
-                        f.write("      - ./secrets/pg_service.conf:${PGSERVICEFILE}\n")
-                    f.write(line) 
-        else:
-            # in the g3w-suite-docker/docker-compose.yml add before the secrets volumes line:
-            # ${G3WSUITE_LOCAL_CODE_PATH}:/code to mount the source code used
-            with open(parameters.COMPOSE_FILE, "r") as f:
-                lines = f.readlines()
-            with open(parameters.COMPOSE_FILE, "w") as f:
-                for line in lines:
-                    f.write(line) 
-                    if "./config/qgis/QGIS3.ini:" in line:
-                        # mount source code
-                        f.write(f"      - {parameters.LOCAL_ADMIN_CODE_PATH}:/code\n")
-                        # also add the mounting of the entrypoint
-                        f.write("      - ./scripts/docker-entrypoint.sh:/usr/bin/docker-entrypoint.sh\n\n")
-                        # add entrypoint definition
-                        f.write('    entrypoint: ["/bin/sh", "/usr/bin/docker-entrypoint.sh"]\n')
 
         print("#### The g3w-suite-docker repository has been cloned and the new branch has been created.\n")
     else:
         print("#### The g3w-suite-docker repository is already cloned.\n")
+        
+    if parameters.DO_DEVEL:
+        # in the g3w-suite-docker/docker-compose-dev.yml substitute the right image to address (in this case the v3.7.x train):
+        # -    image: g3wsuite/g3w-suite:dev
+        # +    image: g3wsuite/g3w-suite:v3.7.x
+        with open(parameters.COMPOSE_FILE, "r") as f:
+            lines = f.readlines()
+        with open(parameters.COMPOSE_FILE, "w") as f:
+            for line in lines:
+                f.write(line.replace("image: g3wsuite/g3w-suite:dev", f"image: {parameters.SUITE_DOCKER_IMAGE}"))
+
+        # add missing line: ./secrets/pg_service.conf:${PGSERVICEFILE} to the volumes part of the db service
+        with open(parameters.COMPOSE_FILE, "r") as f:
+            lines = f.readlines()
+        with open(parameters.COMPOSE_FILE, "w") as f:
+            for line in lines:
+                if "QGIS3.ini" in line:
+                    f.write("      - ./secrets/pg_service.conf:${PGSERVICEFILE}\n")
+                f.write(line) 
+    else:
+        # in the g3w-suite-docker/docker-compose.yml add before the secrets volumes line:
+        # ${G3WSUITE_LOCAL_CODE_PATH}:/code to mount the source code used
+        with open(parameters.COMPOSE_FILE, "r") as f:
+            lines = f.readlines()
+        with open(parameters.COMPOSE_FILE, "w") as f:
+            for line in lines:
+                f.write(line) 
+                if "./config/qgis/QGIS3.ini:" in line:
+                    # mount source code
+                    f.write(f"      - {parameters.LOCAL_ADMIN_CODE_PATH}:/code\n")
+                    # also add the mounting of the entrypoint
+                    f.write("      - ./scripts/docker-entrypoint.sh:/usr/bin/docker-entrypoint.sh\n\n")
+                    # add entrypoint definition
+                    f.write('    entrypoint: ["/bin/sh", "/usr/bin/docker-entrypoint.sh"]\n')
 
 def clone_suite_admin_repo(parameters: Parameters):
     if not os.path.exists("g3w-admin"):
@@ -298,92 +317,158 @@ def setup_pg_service_file(parameters: Parameters):
         print("#### No pg_service.conf setup.\n")
 
 def createRunScripts(parameters: Parameters):
+    # check if there is a docker-compose command in the system, else
+    # we need to use docker compose
+    import shutil
+    docker_compose_cmd = "docker compose"
+    if shutil.which("docker-compose") is not None:
+        print("#### Using docker-compose command.")
+        # we will use docker-compose
+        docker_compose_cmd = "docker-compose"
+
     if parameters.DO_DEVEL:
-        # create a run.sh script in the g3w-suite-docker folder to run the docker-compose-dev.yml file
+        # create devel run scripts
+        #  start_dev.sh
         runsh = textwrap.dedent("""\
             #!/bin/bash
                                 
             echo "Starting the g3w suite in development mode."
             cd g3w-suite-docker/
-            docker compose -f docker-compose-dev.yml up -d
+            COMPOSE_COMMAND -f docker-compose-dev.yml up -d
             cd ..
             echo "Done. You can now access the suite at http://localhost:8000"
         """)
+        runsh = runsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("start_dev.sh", "w") as f:
             f.write(runsh)
         print("#### The start_dev.sh script has been created.\n")
         run_command("chmod +x start_dev.sh")
 
+        # stop_dev.sh
         stopsh = textwrap.dedent("""\
             #!/bin/bash
                                  
             echo "Stopping the g3w suite in development mode."
             cd g3w-suite-docker/
-            docker compose -f docker-compose-dev.yml down
+            COMPOSE_COMMAND -f docker-compose-dev.yml down
             cd ..
             echo "Done."
         """)
+        stopsh = stopsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("stop_dev.sh", "w") as f:
             f.write(stopsh)
         print("#### The stop_dev.sh script has been created.\n")
         run_command("chmod +x stop_dev.sh")
 
+        # logs_dev.sh
         logsh = textwrap.dedent("""\
             #!/bin/bash
 
             echo "Starting the g3w suite dev logs."
             cd g3w-suite-docker/
-            docker compose -f docker-compose-dev.yml logs -f $1
+            COMPOSE_COMMAND -f docker-compose-dev.yml logs -f $1
             cd ..
         """)
+        logsh = logsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("logs_dev.sh", "w") as f:
             f.write(logsh)
         print("#### The logs_dev.sh script has been created.\n")
         run_command("chmod +x logs_dev.sh")
+
+        # restart_dev.sh - to restart a service passed by name
+        restartsh = textwrap.dedent("""\
+            #!/bin/bash
+
+            if [ -z "$1" ]
+            then
+              echo "Please provide the service name to restart."
+              echo "Usage: ./restart_dev.sh <service_name>"
+              exit 1
+            fi
+
+            echo "Restarting the g3w suite dev service: $1"
+            cd g3w-suite-docker/
+            COMPOSE_COMMAND -f docker-compose-dev.yml restart $1
+            cd ..
+            echo "Done."
+        """)
+        restartsh = restartsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
+        with open("restart_dev.sh", "w") as f:
+            f.write(restartsh)
+        print("#### The restart_dev.sh script has been created.\n")
+        run_command("chmod +x restart_dev.sh")
+
     else:
-        # create a run.sh script in the g3w-suite-docker folder to run the docker-compose.yml file
+        # create production run scripts
+        #  start.sh
         runsh = textwrap.dedent("""\
             #!/bin/bash
                                 
             echo "Starting the g3w suite in production mode."
             cd g3w-suite-docker/
-            docker compose -f docker-compose.yml up -d
+            COMPOSE_COMMAND -f docker-compose.yml up -d
             cd ..
             echo "Done."
         """)
+        runsh = runsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("start.sh", "w") as f:
             f.write(runsh)
         print("#### The start.sh script has been created.\n")
         run_command("chmod +x start.sh")
 
+        # stop.sh
         stopsh = textwrap.dedent("""\
             #!/bin/bash
                                  
             echo "Stopping the g3w suite in production mode."
             cd g3w-suite-docker/
-            docker compose -f docker-compose.yml down
+            COMPOSE_COMMAND -f docker-compose.yml down
             cd ..
             echo "Done."
         """)
+        stopsh = stopsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("stop.sh", "w") as f:
             f.write(stopsh)
         print("#### The stop.sh script has been created.\n")
         run_command("chmod +x stop.sh")
 
+        # logs.sh
         logsh = textwrap.dedent("""\
             #!/bin/bash
                                 
             echo "Starting the g3w suite logs."
             cd g3w-suite-docker/
-            docker compose -f docker-compose.yml logs -f $1
+            COMPOSE_COMMAND -f docker-compose.yml logs -f $1
             cd ..
         """)
+        logsh = logsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
         with open("logs.sh", "w") as f:
             f.write(logsh)
         print("#### The logs.sh script has been created.\n")
         run_command("chmod +x logs.sh")
 
-    
+        # restart.sh - to restart a service passed by name
+        restartsh = textwrap.dedent("""\
+            #!/bin/bash
+
+            if [ -z "$1" ]
+            then
+              echo "Please provide the service name to restart."
+              echo "Usage: ./restart.sh <service_name>"
+              exit 1
+            fi
+
+            echo "Restarting the g3w suite service: $1"
+            cd g3w-suite-docker/
+            COMPOSE_COMMAND -f docker-compose.yml restart $1
+            cd ..
+            echo "Done."
+        """)
+        restartsh = restartsh.replace("COMPOSE_COMMAND", docker_compose_cmd)
+        with open("restart.sh", "w") as f:
+            f.write(restartsh)
+        print("#### The restart.sh script has been created.\n")
+        run_command("chmod +x restart.sh")
 
 
 def setup_redis_service(parameters: Parameters):
@@ -428,7 +513,6 @@ def toggle_frontend(parameters: Parameters):
     enableFrontend = parameters.FRONTEND
     if enableFrontend:
         print("#### Enabling the frontend app.")
-
     
     # in the settings file, make sure that in the G3WADMIN_LOCAL_MORE_APPS list, the 'frontend' app is commented (disabled)
     with open(parameters.SETTINGS_FILE, "r") as f:

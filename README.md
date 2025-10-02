@@ -8,7 +8,7 @@ This repository contains the scripts to quickly configure a G3W-SUITE instance.
 Install the module via pip:
 
 ```bash
-pip install g3w_config_scripts
+pip install g3w-config-scripts
 ```
 
 ### Usage
